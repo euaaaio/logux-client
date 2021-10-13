@@ -2,7 +2,6 @@ import {
   getCurrentInstance,
   onBeforeUnmount,
   onErrorCaptured,
-  triggerRef,
   reactive,
   readonly,
   computed,
@@ -50,17 +49,41 @@ function checkErrorProcessor() {
   }
 }
 
+function deepCopy(obj, cache = []) {
+  if (!obj || typeof obj !== 'object') {
+    return obj
+  }
+
+  let hit = cache.filter(c => c.original === obj)[0]
+  if (hit) {
+    return hit.copy
+  }
+
+  if (obj instanceof Map) {
+    return new Map(deepCopy(Array.from(obj)))
+  }
+
+  let copy = Array.isArray(obj) ? [] : {}
+  cache.push({
+    original: obj,
+    copy
+  })
+
+  Object.keys(obj).forEach(key => {
+    copy[key] = deepCopy(obj[key], cache)
+  })
+
+  return copy
+}
+
 function useSyncStore(store) {
   let error = ref(null)
   let state = ref()
   let unsubscribe
 
-  let listener = newState => {
-    state.value = newState
-    triggerRef(state)
-  }
-
-  unsubscribe = store.subscribe(listener)
+  unsubscribe = store.subscribe(value => {
+    state.value = deepCopy(value)
+  })
 
   if (store.loading) {
     watch(error, () => {
